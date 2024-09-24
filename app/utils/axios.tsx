@@ -1,18 +1,27 @@
 import axios from "axios";
 
 const tokenRefresh = async () => {
-  await axios.post(
-    "https://todogochi.store/auth/refresh",
-    {},
-    { withCredentials: true }
-  );
+  try {
+    const response = await axios.post(
+      "https://todogochi.store/auth/refresh",
+      {},
+      { withCredentials: true }
+    );
+
+    // 새 액세스 토큰을 응답에서 받아 저장
+    const newAccessToken = response.data.accessToken; // 실제 응답 구조에 따라 조정 필요
+    localStorage.setItem("accessToken", newAccessToken);
+
+    return newAccessToken;
+  } catch (error) {
+    console.error("토큰 리프레시 실패:", error);
+    // 리프레시 실패 시 로그아웃 처리 또는 다른 에러 처리
+    throw error;
+  }
 };
 
 export const instance = axios.create({
-  // 상대적인 URL을 인스턴스 메서드에 전달하려면 baseURL을 설정하는 것은 편리하다.
-  // URL(서버 주소) 예시 - http://127.0.0.1:5500
   baseURL: "https://todogochi.store",
-  // 요청이 timeout보다 오래 걸리면 요청이 중단된다.
   timeout: 4000,
 });
 
@@ -38,8 +47,6 @@ instance.interceptors.response.use(
   },
   async (error) => {
     if (error.response?.status === 401) {
-      // isTokenExpired() - 토큰 만료 여부를 확인하는 함수
-      // tokenRefresh() - 토큰을 갱신해주는 함수
       await tokenRefresh();
 
       const accessToken = localStorage.getItem("accessToken");
