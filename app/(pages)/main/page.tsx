@@ -4,11 +4,219 @@
 import MonthCalendar from "@/app/components/MonthCalendar";
 import SwipeActionList from "@/app/components/Task";
 import WeekCalendar from "@/app/components/WeekCalendar";
-import { useState } from "react";
+import { instance } from "@/app/utils/axios";
+import { useEffect, useState } from "react";
+
+interface Experience {
+  user_id: number;
+  feed: number;
+  play: number;
+  pet: number;
+}
+
+interface Monster {
+  user_id: number;
+  level: string;
+  health_status: string;
+  nickname: string;
+  happiness: number;
+  created_at: string;
+  sick_at: string | null;
+  hunger: number;
+  experience: Experience;
+}
 
 export default function Page() {
   const [month, setMonth] = useState(false);
   const [sized, setSized] = useState(false);
+  const [day, setDay] = useState(0);
+  const [walking, setWalking] = useState(false);
+  const [message, setMessage] = useState("");
+  const [timeLeft, setTimeLeft] = useState<any>({ hour: 48, min: 0 });
+
+  const [status, setStatus] = useState<Monster>({
+    user_id: 0,
+    level: "",
+    health_status: "",
+    nickname: "",
+    happiness: 0,
+    created_at: "",
+    sick_at: "",
+    hunger: 0,
+    experience: { user_id: 0, feed: 0, play: 0, pet: 0 },
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prevTime: any) => {
+        if (prevTime.hour === 0 && prevTime.min === 0) {
+          clearInterval(timer);
+          return prevTime;
+        }
+
+        let newHour = prevTime.hour;
+        let newMin = prevTime.min;
+
+        if (newMin > 0) {
+          newMin--;
+        } else if (newHour > 0) {
+          newHour--;
+          newMin = 59;
+        }
+
+        return { hour: newHour, min: newMin };
+      });
+    }, 60000); // 1분(60000ms)마다 업데이트
+
+    return () => clearInterval(timer);
+  }, []);
+
+  function calculateDaysSinceCreation(userData: Monster): number {
+    const createdAt = new Date(userData.created_at);
+    const today = new Date();
+
+    // 시간대 차이로 인한 오차를 방지하기 위해 날짜만 비교
+    const createdAtUTC = Date.UTC(
+      createdAt.getFullYear(),
+      createdAt.getMonth(),
+      createdAt.getDate()
+    );
+    const todayUTC = Date.UTC(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+    const millisecondsPerDay = 1000 * 60 * 60 * 24;
+    const daysDifference = Math.floor(
+      (todayUTC - createdAtUTC) / millisecondsPerDay
+    );
+
+    return daysDifference;
+  }
+
+  const getStatus = async () => {
+    const res = await instance.get("/user");
+    const resGotchi = await instance.get(
+      `/tamagotchi/${res.data.userId}/status`
+    );
+    const resTime = await instance.get(
+      `/tamagotchi/${res.data.userId}/level-progress`
+    );
+    setStatus(resGotchi.data);
+    setDay(calculateDaysSinceCreation(resGotchi.data));
+    setTimeLeft({ hour: res.data.hour, min: res.data.min });
+  };
+
+  const feed = async () => {
+    const res = await instance.get("/user");
+    try {
+      const resGotchi = await instance.post(`tamagotchi/feed`, {
+        userId: res.data.userId,
+      });
+    } catch (e: any) {
+      if (e.status === 403) {
+        alert("아픈 친구에게는 먹이를 줄 수 없어요");
+      }
+      console.log(e);
+    }
+    getStatus();
+  };
+
+  const pet = async () => {
+    const res = await instance.get("/user");
+
+    try {
+      const resGotchi = await instance.post(`tamagotchi/pet`, {
+        userId: res.data.userId,
+      });
+    } catch (e: any) {
+      console.log(e);
+    }
+    getStatus();
+  };
+
+  const walk = async () => {
+    const res = await instance.get("/user");
+    try {
+      const resGotchi = await instance.post(`tamagotchi/play`, {
+        userId: res.data.userId,
+      });
+      setWalking(true);
+    } catch (e: any) {
+      if (e.status === 403) {
+        alert("아픈 친구와 산책할 수 없어요");
+      }
+      setWalking(false);
+      console.log(e);
+    }
+    getStatus();
+  };
+
+  const cure = async () => {
+    const res = await instance.get("/user");
+    try {
+      const resGotchi = await instance.post(`tamagotchi/cure`, {
+        userId: res.data.userId,
+      });
+    } catch (e: any) {
+      console.log(e);
+    }
+    getStatus();
+  };
+
+  const eggSay = () => {
+    const messages: string[] = [
+      "이 순간을 만끽하고 있어!",
+      "너를 위해 내가 더 귀여워질게, 기대해!",
+      "너는 나의 소중한 친구야.",
+      "몸이 막 근질근질해!",
+      "너와 함께 할 수 있어 정말 행복해!",
+      "내 목소리 들리니?",
+    ];
+    const randomIndex = Math.floor(Math.random() * messages.length);
+    setMessage(message[randomIndex]);
+  };
+
+  const babySay = () => {
+    const messages: string[] = [
+      "너의 사랑이 필요해!",
+      "내가 이렇게 귀여운 건 네 덕분이야!",
+      "너를 생각하면서 놀고 있었어.",
+      "내가 최고의 강아지라는 건 모두가 알아!",
+      "너와 함께하는 매일이 소중해.",
+      "산책 가는 건 나의 특권이야!",
+      "내가 귀여운 건 대체로 사실이야.",
+    ];
+    const randomIndex = Math.floor(Math.random() * messages.length);
+    setMessage(message[randomIndex]);
+  };
+
+  const adultSay = () => {
+    const messages: string[] = [
+      "어른 강아지로서 품격을 지켜야 해.",
+      "나의 성숙한 매력에 빠져봐!",
+      "너는 나의 소중한 친구야.",
+      "너와 함께하는 매일이 소중해.",
+      "꾸준한 모습 진짜 멋져, 내 자랑이야!",
+      "일 끝나면 나랑 산책하러 가자, 약속이야!",
+      "일할 때 나도 옆에서 응원해 줄게!",
+      "내 귀여움이 힘이 돼.",
+    ];
+    const randomIndex = Math.floor(Math.random() * messages.length);
+    setMessage(message[randomIndex]);
+  };
+
+  useEffect(() => {
+    getStatus();
+  }, []);
+
+  useEffect(() => {
+    if (!walking) return;
+    setTimeout(() => {
+      setWalking(false);
+    }, 3000);
+  }, [walking]);
 
   return (
     <div className="bg-neutral-700 flex items-center justify-center min-h-screen h-full w-screen max-xs:w-full max-xs:h-full relative flex-col">
@@ -17,25 +225,94 @@ export default function Page() {
           sized ? "z-[129]" : ""
         }`}
       >
-        <img src="/room.png" className="absolute z-1" alt="room" />
+        {walking ? (
+          <img src="/back.gif" className="absolute z-1" alt="room" />
+        ) : (
+          <img src="/room.png" className="absolute z-1" alt="room" />
+        )}
+
         <div className=" inset-0 flex items-start justify-center absolute z-[101] top-[10px] ">
           <div className="relative  flex flex-col justify-center items-center">
             <div className="flex items-center">
               <img src="/coin.svg" alt="coin" />
               <span className="font-neodunggeunmo mr-[13px] ml-[3px]">10</span>
-              <span className="font-neodunggeunmo mr-[8px]">Day 2</span>
+              <span className="font-neodunggeunmo mr-[8px]">Day {day}</span>
               <img src="/energy.svg" alt="energy" className="mr-[8px]" />
-              <img src="/heart.png" alt="heart" />
-              <img src="/heart.png" alt="heart" />
-              <img src="/heart.png" alt="heart" />
-              <img src="/heartHalf.png" alt="heart" />
-              <img src="/emptyHeart.png" alt="heart" />
+
+              {Array.from(
+                { length: Math.floor(status.happiness / 2) },
+                (_, index) => (
+                  <img
+                    key={index}
+                    src="/heart.png"
+                    alt={`Repeated image ${index + 1}`}
+                  />
+                )
+              )}
+              {Array.from({ length: status.happiness % 2 }, (_, index) => (
+                <img
+                  key={index}
+                  src="/heartHalf.png"
+                  alt={`Repeated image ${index + 1}`}
+                />
+              ))}
+              {Array.from(
+                {
+                  length:
+                    5 -
+                    (Math.floor(status.happiness / 2) + (status.happiness % 2)),
+                },
+                (_, index) => (
+                  <img
+                    key={index}
+                    src="/emptyHeart.png"
+                    alt={`Repeated image ${index + 1}`}
+                  />
+                )
+              )}
             </div>
           </div>
         </div>
+        {status.level === "egg" && (
+          <div>
+            <div className="absolute z-[101] top-[90px] left-[130px]">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="100"
+                height="35"
+                viewBox="0 0 100 35"
+                fill="none"
+              >
+                <path
+                  d="M96 0H4V1H2V2H1V4H0V31H1V33H2V34H4V35H96V34H98V33H99V31H100V4H99V2H98V1H96V0Z"
+                  fill="#FAFAFA"
+                />
+                <rect x="6" y="2" width="88" height="1" fill="#D8D8D8" />
+                <rect x="6" y="32" width="88" height="1" fill="#D8D8D8" />
+              </svg>
+              <div className="font-neodunggeunmo absolute z-[130] top-[12px] left-[0px] flex justify-center items-center">
+                {String(timeLeft.hour).padStart(2, "0")}:
+                {String(timeLeft.min).padStart(2, "0")}
+              </div>
+            </div>
+            <img
+              onClick={eggSay}
+              className="absolute z-[103] bottom-[70px] left-[120px]"
+              src="/egg_default.gif"
+              alt="egg"
+            />
+          </div>
+        )}
+        {status.level === "baby" && (
+          <img onClick={babySay} src="/step2_default.gif" alt="adult" />
+        )}
+        {status.level === "adult" && (
+          <img onClick={adultSay} src="/step1_default.gif" alt="baby" />
+        )}
+
         <div className="absolute flex justify-center items-center left-[7px] bottom-[10px] z-[102]">
           <div className="flex space-x-[8px]">
-            <div className="relative cursor-pointer">
+            <div className="relative cursor-pointer" onClick={feed}>
               <img src="/button.png" alt="button" />
               <img
                 className="absolute z-[2] top-[2px] left-[21px]"
@@ -43,7 +320,7 @@ export default function Page() {
                 alt="button"
               />
             </div>
-            <div className="relative cursor-pointer">
+            <div className="relative cursor-pointer" onClick={pet}>
               <img src="/button.png" alt="button" />
               <img
                 className="absolute z-[2] top-[2px] left-[21px]"
@@ -51,7 +328,7 @@ export default function Page() {
                 alt="button"
               />
             </div>
-            <div className="relative cursor-pointer">
+            <div className="relative cursor-pointer" onClick={walk}>
               <img src="/button.png" alt="button" />
               <img
                 className="absolute z-[2] top-[2px] left-[21px]"
@@ -59,8 +336,18 @@ export default function Page() {
                 alt="button"
               />
             </div>
-            <div className="relative cursor-pointer">
-              <img src="/disableButton.png" alt="button" />
+            <div
+              className={`relative ${
+                status.health_status === "sick" ? "cursor-pointer" : ""
+              } `}
+              onClick={cure}
+            >
+              {status.health_status === "sick" ? (
+                <img src="/button.png" alt="button" />
+              ) : (
+                <img src="/disableButton.png" alt="button" />
+              )}
+
               <img
                 className="absolute z-[2] top-[2px] left-[21px]"
                 src="/fix.png"
