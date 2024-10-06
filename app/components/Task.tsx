@@ -12,6 +12,8 @@ interface TodoItem {
   days: string[];
   time: string;
   status: boolean;
+  date: string;
+  colorTag: string;
 }
 
 const colorTagToColor: { [key: string]: string } = {
@@ -20,7 +22,7 @@ const colorTagToColor: { [key: string]: string } = {
   YELLOW: "f7e583",
   GREEN: "a6e091",
   BLUE: "78c1f6",
-  PURPLE: "ba9edd",
+  INDIGO: "ba9edd",
   GRAY: "d7d7d7",
 };
 
@@ -29,10 +31,12 @@ interface ListItemProps {
   text: string;
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
-  onDelay: () => void;
+  onDelay: (id: number) => void;
   color: string;
   onSelect: (id: number) => void;
   item: any;
+  getData: () => void;
+  setModal3: (args: boolean) => void;
 }
 
 const ListItem: React.FC<ListItemProps> = ({
@@ -44,6 +48,8 @@ const ListItem: React.FC<ListItemProps> = ({
   color,
   onSelect,
   item,
+  getData,
+  setModal3,
 }) => {
   const [translation, setTranslation] = useState(0);
   const [click, setClick] = useState(false);
@@ -131,13 +137,11 @@ const ListItem: React.FC<ListItemProps> = ({
   };
 
   // Define specific button handlers
-  const handleEditClick = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      e.stopPropagation();
-      onEdit(id);
-    },
-    [id, onEdit]
-  );
+  const handleEditClick = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    onSelect(id);
+    setClickEdit(!clickEdit);
+  };
 
   const handleDeleteClick = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -150,13 +154,25 @@ const ListItem: React.FC<ListItemProps> = ({
   const handleDelayClick = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       e.stopPropagation();
-      onDelay();
+      onDelay(id);
     },
-    [onDelay]
+    [onDelay, id]
   );
 
-  const handleCheckboxChange = useCallback(() => {
-    setClick((prev) => !prev);
+  const handleCheckboxChange = async () => {
+    setClick(true);
+    const res: any = await instance.get("/user");
+    const postRes: any = await instance.post(
+      `todolist/complete/${res.data.userId}/${id}`
+    );
+    if (postRes.data.rewardCoin === 3) {
+      setModal3 && setModal3(true);
+    }
+    getData();
+  };
+
+  useEffect(() => {
+    setClick(!!item.status);
   }, []);
 
   return (
@@ -251,7 +267,13 @@ const ListItem: React.FC<ListItemProps> = ({
         </div>
       ) : (
         <div className="mb-[30px]">
-          <TodoAdd initialData={item} setAdd={setClickEdit} />
+          <TodoAdd
+            getData={getData}
+            edit={true}
+            id={id}
+            initialData={item}
+            setAdd={setClickEdit}
+          />
         </div>
       )}
     </>
@@ -265,6 +287,8 @@ const SwipeActionList: React.FC = () => {
   const [modal, setModal] = useState(false);
   const [click, setClick] = useState(false);
   const [items, setItems] = useState<TodoItem[]>([]);
+  const [modalId, setModalId] = useState(0);
+  const [modal3, setModal3] = useState(false);
 
   const selectedDate = useStore((state) => state.selectedDate);
 
@@ -291,9 +315,11 @@ const SwipeActionList: React.FC = () => {
           id: el.todoId,
           text: el.todoText,
           color: colorTagToColor[el.colorTag],
+          colorTag: el.colorTag,
           time: el.targetTime,
           days: [],
           status: el.status,
+          date: formattedDate,
         };
       })
     );
@@ -321,21 +347,22 @@ const SwipeActionList: React.FC = () => {
     [items]
   );
 
-  const handleDelete = useCallback((id: number) => {
-    setItems((prevItems) => prevItems.filter((item) => item.id !== id));
-  }, []);
+  const handleDelete = async (id: number) => {
+    const res = await instance.get("/user");
+    const deleteRes = await instance.delete(
+      `/todolist/delete/${id}?userId=${res.data.userId}`
+    );
+    getData();
+  };
 
-  const handleDelay = useCallback(() => {
+  const handleDelay = (id: number) => {
     setModal(true);
-  }, []);
+    setModalId(id);
+  };
 
-  const handleSelect = useCallback(
-    (id: number) => {
-      console.log("handleSelect called with id:", id);
-      handleEdit(id);
-    },
-    [handleEdit]
-  );
+  const handleSelect = (id: number) => {
+    handleEdit(id);
+  };
 
   const handleShowFullAdd = useCallback(() => {
     setSimpleAdd(false);
@@ -360,6 +387,7 @@ const SwipeActionList: React.FC = () => {
 
     setSimpleAdd(false);
     setAdd(false);
+    getData();
   };
 
   useEffect(() => {
@@ -372,16 +400,26 @@ const SwipeActionList: React.FC = () => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [ref]); // No need to include selectedDays here
+  }, [ref, selectedDate, inputValue]); // selectedDate를 의존성 배열에 추가
 
   return (
     <>
       {!add && !simpleAdd && (
         <button
           onClick={handleAddTask}
-          className="w-[350px] h-[50px] p-2 mt-2 text-gray-500 border border-gray-200 rounded-lg text-center shadow-sm"
+          className="w-[350px] h-[50px] p-2 mt-2 text-gray-500 border border-gray-200 rounded-lg text-center shadow-sm flex justify-center items-center"
         >
-          + 할 일 추가
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="30"
+            height="30"
+            viewBox="0 0 30 30"
+            fill="none"
+          >
+            <path d="M15.5 8L15.5 22L14.5 22L14.5 8L15.5 8Z" fill="#3F3F3F" />
+            <path d="M8 14H22V15H8V14Z" fill="#3F3F3F" />
+          </svg>
+          할 일 추가
         </button>
       )}
 
@@ -446,14 +484,32 @@ const SwipeActionList: React.FC = () => {
               onClick={handleShowFullAdd}
               className="text-2xl font-bold mb-[5px]"
             >
-              +
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="30"
+                height="30"
+                viewBox="0 0 30 30"
+                fill="none"
+              >
+                <path
+                  d="M15.5 8L15.5 22L14.5 22L14.5 8L15.5 8Z"
+                  fill="#3F3F3F"
+                />
+                <path d="M8 14H22V15H8V14Z" fill="#3F3F3F" />
+              </svg>
             </button>
           </div>
         </div>
       )}
 
       {add && (
-        <TodoAdd setAdd={setAdd} initialData={selectedItem} val={inputValue} />
+        <TodoAdd
+          setAdd={setAdd}
+          initialData={selectedItem}
+          val={inputValue}
+          getData={getData}
+          setModal3={setModal3}
+        />
       )}
 
       <div className="w-[380px] mx-auto p-4 rounded-lg shadow-lg">
@@ -461,6 +517,7 @@ const SwipeActionList: React.FC = () => {
           {items.map((item) => (
             <div key={item.id}>
               <ListItem
+                setModal3={setModal3}
                 item={item}
                 id={item.id}
                 text={item.text}
@@ -469,12 +526,32 @@ const SwipeActionList: React.FC = () => {
                 onDelete={handleDelete}
                 onDelay={handleDelay}
                 onSelect={handleSelect}
+                getData={getData}
               />
             </div>
           ))}
         </ul>
       </div>
-      {modal && <Modal setModal={setModal} text="" />}
+      {modal && (
+        <Modal
+          setModal={setModal}
+          text=""
+          items={items}
+          id={modalId}
+          getData={getData}
+        />
+      )}
+      {modal3 && (
+        <Modal
+          id={0}
+          items={[]}
+          getData={() => {}}
+          tutorial={true}
+          setModal={setModal}
+          text={`할 일을 전부 완료했어요!
+보너스 코인을 드릴게요.`}
+        />
+      )}
     </>
   );
 };

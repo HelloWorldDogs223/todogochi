@@ -1,13 +1,47 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
+import { instance } from "@/app/utils/axios";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function Page() {
   const router = useRouter();
+
+  const [coinList, setCoinList] = useState([]);
+  const [totalCoin, setTotalCoin] = useState(0);
+
+  const getData = async () => {
+    const res = await instance.get("/user");
+    const coinRes = await instance.get(
+      `/user/${res.data.userId}/coin-transactions`
+    );
+    console.log(coinRes.data);
+    setTotalCoin(res.data.coin);
+    setCoinList(coinRes.data);
+  };
+
+  const formatDate = (dateString: string) => {
+    // UTC 시간으로 Date 객체 생성
+    const date = new Date(dateString);
+
+    // 한국 시간대로 변환
+    const koreaTime = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+
+    const year = koreaTime.getUTCFullYear();
+    const month = koreaTime.getUTCMonth() + 1;
+    const day = koreaTime.getUTCDate();
+
+    return `${year}년 ${month}월 ${day}일`;
+  };
+
+  useEffect(() => {
+    getData();
+  }, []);
+
   return (
-    <div className="bg-[#EDEDED] flex items-center justify-center min-h-screen h-full  max-xs:w-full max-xs:h-full relative flex-col">
-      <div className="relative w-[390px] mt-[112px] h-[844px] px-[25px]">
+    <div className="bg-[#EDEDED] flex items-center justify-center min-h-screen h-full  w-full max-xs:w-full max-xs:h-full relative flex-col">
+      <div className="relative w-[390px] mt-[112px] h-full px-[25px]">
         <div className="flex justify-between mb-[40px]">
           <div className="flex items-center">
             <svg
@@ -48,31 +82,48 @@ export default function Page() {
             />
           </svg>
         </div>
-        <div className="flex items-center">
+        <div className="flex">
           <img src="/coin.svg" alt="coin" />
           <div className="text-[12px] ml-[5px] mr-[10px]">Total Coin</div>
-          <div className="text-[12px]">10</div>
+          <div className="text-[12px]">{totalCoin}</div>{" "}
         </div>
-        <div className="flex flex-col  bg-[#FAFAFA] w-[350px] px-[20px] rounded-[5px] mb-[10px] min-h-[100px] mt-[12px] ">
-          <div className="font-semibold p-[20px]">2024년 10월 30일</div>
-          <div className="flex items-center justify-between">
-            <div className="text-[#3F3F3F] ml-[10px]">보너스 코인</div>
-            <div className="text-[#A6A6A6] mr-[10px]">+2</div>
-          </div>
-          <div className="mx-[5px] h-[1px] w-[300px] bg-[#D8D8D8] mt-[15px] mb-[15px]"></div>
 
-          <div className="flex items-center justify-between">
-            <div className="text-[#3F3F3F] ml-[10px]">보너스 코인</div>
-            <div className="text-[#A6A6A6] mr-[10px]">+2</div>
-          </div>
-          <div className="mx-[5px] h-[1px] w-[300px] bg-[#D8D8D8] mt-[15px] mb-[15px]"></div>
-
-          <div className="flex items-center justify-between">
-            <div className="text-[#3F3F3F] ml-[10px]">보너스 코인</div>
-            <div className="text-[#A6A6A6] mr-[10px]">+2</div>
-          </div>
-          <div className="mx-[5px] h-[1px] w-[300px] bg-[#D8D8D8] mt-[15px] mb-[15px]"></div>
-        </div>
+        {Object.entries(
+          coinList.reduce((acc: any, el: any) => {
+            const formattedDate = formatDate(el.createdAt);
+            if (!acc[formattedDate]) {
+              acc[formattedDate] = [];
+            }
+            acc[formattedDate].push(el);
+            return acc;
+          }, {})
+        )
+          .reverse()
+          .map(([date, items]: any) => (
+            <div
+              key={date}
+              className="mt-[12px] flex flex-col bg-[#FAFAFA] w-[350px] px-[20px] rounded-[5px] mb-[10px] min-h-[100px]"
+            >
+              <div className="font-semibold p-[20px]">{date}</div>
+              {items.map((el: any) => (
+                <div key={el.id} className="flex flex-col bg-[#FAFAFA]">
+                  <div className="">
+                    <div className="flex items-center justify-between mt-[15px]">
+                      <div className="text-[#3F3F3F] ml-[10px]">
+                        {el.description}
+                      </div>
+                      <div className="text-[#A6A6A6] mr-[10px]">
+                        {el.changeAmount > 0
+                          ? "+" + el.changeAmount
+                          : el.changeAmount}
+                      </div>
+                    </div>
+                    <div className="mx-[5px] h-[1px] w-[300px] bg-[#D8D8D8] mt-[15px] mb-[15px]"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
       </div>
     </div>
   );

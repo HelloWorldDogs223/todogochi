@@ -32,6 +32,7 @@ export default function Page() {
   const [month, setMonth] = useState(false);
   const [modal, setModal] = useState(false);
   const [button, setButton] = useState(2);
+  const [totalCoin, setTotalCoin] = useState(0);
   const [sized, setSized] = useState(false);
   const [modalCoin, setModalCoin] = useState(10);
   const [buttonText, setButtonText] = useState("REVIVE");
@@ -40,6 +41,7 @@ export default function Page() {
   const [modalText, setModalText] = useState("");
   const [message, setMessage] = useState("");
   const [timeLeft, setTimeLeft] = useState<any>({ hour: 48, min: 0 });
+  const [todayCoin, setTodayCoin] = useState(0);
 
   const [status, setStatus] = useState<Monster>({
     user_id: 0,
@@ -107,19 +109,24 @@ export default function Page() {
     const resGotchi = await instance.get(
       `/tamagotchi/${res.data.userId}/status`
     );
+    const resTransaction = await instance.get(
+      `/user/${res.data.userId}/coin-transactions`
+    );
+
+    setTotalCoin(res.data.coin);
 
     if (resGotchi.data.health_status !== "HEALTHY") {
       setModalText(`다마고치가 아파요. \n 치료 하시겠어요?`);
     }
 
-    console.log(resGotchi.data);
-
     const resTime = await instance.get(
-      `/tamagotchi/${res.data.userId}/level-progress`
+      `/tamagotchi/${resGotchi.data.id}/level-progress`
     );
+
     setStatus(resGotchi.data);
     setDay(calculateDaysSinceCreation(resGotchi.data));
     setTimeLeft({ hour: resTime.data.hour, min: resTime.data.min });
+
     if (resGotchi.data.level === "egg") {
       eggSay();
     } else if (resGotchi.data.level === "adult") {
@@ -130,11 +137,18 @@ export default function Page() {
   };
 
   const feed = async () => {
-    const res = await instance.get("/user");
     try {
-      const resGotchi = await instance.post(`tamagotchi/feed`, {
-        userId: res.data.userId,
-      });
+      const res = await instance.get("/user");
+      const resGotchi = await instance.get(
+        `/tamagotchi/${res.data.userId}/status`
+      );
+
+      const resGotchiFeed = await instance.post(
+        `tamagotchi/${resGotchi.data.id}/feed`,
+        {
+          userId: res.data.userId,
+        }
+      );
     } catch (e: any) {
       if (e.status === 403) {
         alert("아픈 친구에게는 먹이를 줄 수 없어요");
@@ -146,11 +160,17 @@ export default function Page() {
 
   const pet = async () => {
     const res = await instance.get("/user");
+    const resGotchi = await instance.get(
+      `/tamagotchi/${res.data.userId}/status`
+    );
 
     try {
-      const resGotchi = await instance.post(`tamagotchi/pet`, {
-        userId: res.data.userId,
-      });
+      const resGotchiPet = await instance.post(
+        `tamagotchi/${resGotchi.data.id}/pet`,
+        {
+          userId: res.data.userId,
+        }
+      );
     } catch (e: any) {
       console.log(e);
     }
@@ -159,10 +179,17 @@ export default function Page() {
 
   const walk = async () => {
     const res = await instance.get("/user");
+    const resGotchi = await instance.get(
+      `/tamagotchi/${res.data.userId}/status`
+    );
+
     try {
-      const resGotchi = await instance.post(`tamagotchi/play`, {
-        userId: res.data.userId,
-      });
+      const resGotchiWalk = await instance.post(
+        `tamagotchi/${resGotchi.data.id}/play`,
+        {
+          userId: res.data.userId,
+        }
+      );
       setWalking(true);
     } catch (e: any) {
       if (e.status === 403) {
@@ -176,10 +203,17 @@ export default function Page() {
 
   const cure = async () => {
     const res = await instance.get("/user");
+    const resGotchi = await instance.get(
+      `/tamagotchi/${res.data.userId}/status`
+    );
+
     try {
-      const resGotchi = await instance.post(`/tamagotchi/cure`, {
-        userId: res.data.userId,
-      });
+      const resGotchiCure = await instance.post(
+        `/tamagotchi/${resGotchi.data.id}/cure`,
+        {
+          userId: res.data.userId,
+        }
+      );
     } catch (e: any) {
       console.log(e);
     }
@@ -239,9 +273,23 @@ export default function Page() {
     setMessage(messages[randomIndex]);
   };
 
+  const getTodayCoin = async () => {
+    const res = await instance.get("/user");
+    const resTransaction = await instance.get(
+      `/user/${res.data.userId}/coin-transactions`
+    );
+    processMultipleDates(
+      resTransaction.data.map((el: any) => ({
+        createdAt: el.createdAt,
+        changeAmount: el.changeAmount,
+      }))
+    );
+  };
+
   useEffect(() => {
     getStatus();
-    revive(); // 지울 것
+    getTodayCoin();
+    // revive(); // 지울 것
   }, []);
 
   useEffect(() => {
@@ -250,6 +298,33 @@ export default function Page() {
       setWalking(false);
     }, 4000);
   }, [walking]);
+
+  function trackCoins(createdAtStr: string, changeAmount: number) {
+    const createdAt = new Date(createdAtStr);
+    const today = new Date();
+
+    // 한국 시간대로 변환
+    const createdAtKST = new Date(createdAt.getTime() + 9 * 60 * 60 * 1000);
+    const todayKST = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+
+    // 날짜만 비교하기 위해 시간을 00:00:00으로 설정
+    createdAtKST.setUTCHours(0, 0, 0, 0);
+    todayKST.setUTCHours(0, 0, 0, 0);
+
+    const daysDiff = Math.floor(
+      (todayKST.getTime() - createdAtKST.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (daysDiff === 0) {
+      setTodayCoin((prev) => prev + changeAmount);
+    }
+  }
+
+  function processMultipleDates(data: any) {
+    data.map((info: any) => ({
+      coins: trackCoins(info.createdAt, info.changeAmount),
+    }));
+  }
 
   return (
     <>
@@ -270,7 +345,7 @@ export default function Page() {
               <div className="flex items-center">
                 <img src="/coin.svg" alt="coin" />
                 <span className="font-neodunggeunmo mr-[13px] ml-[3px]">
-                  10
+                  {totalCoin}
                 </span>
                 <span className="font-neodunggeunmo mr-[8px]">Day {day}</span>
                 <HungerMeter hunger={status.hunger} />
@@ -550,7 +625,7 @@ export default function Page() {
             <div className="flex text-[12px] items-center">
               <img src="/coin.svg" alt="coin" />
               <span className="ml-[5px]">Today Coin</span>
-              <span className="ml-[5px]">2</span>
+              <span className="ml-[5px]">{todayCoin}</span>
             </div>
             <div className="flex items-center">
               <img src="list.svg" alt="sort" />
@@ -561,7 +636,7 @@ export default function Page() {
         </div>
         <div className={`${sized ? "w-full h-[369px]" : ""}`}></div>
       </div>
-      {
+      {modal && (
         <GochiModal
           text={modalText}
           setModal={setModal}
@@ -569,7 +644,7 @@ export default function Page() {
           button={button}
           buttonText={buttonText}
         />
-      }
+      )}
     </>
   );
 }
