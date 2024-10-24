@@ -65,7 +65,6 @@ export function useCharacter() {
       updateTimer(levelProgressRes.data);
       processTransactions(transactionRes.data);
       checkCharacterStatus(tamagotchiRes.data);
-      applyLevelEffect(tamagotchiRes.data);
     } catch (error) {
       console.error("Error fetching status:", error);
     }
@@ -137,6 +136,7 @@ export function useCharacter() {
       );
 
       checkHappiness(tamagotchiRes.data, userRes.data.nickName);
+      applyLevelEffect(tamagotchiRes.data);
     } catch (error) {
       console.error("Error in onlyFirstInfo:", error);
     }
@@ -146,6 +146,10 @@ export function useCharacter() {
     characterData: CharacterStatus,
     userNickName: string
   ) => {
+    if (characterData.health_status === "dead") {
+      return;
+    }
+
     if (characterData.happiness <= 5) {
       setModalState({
         isOpen: true,
@@ -369,6 +373,8 @@ export function useCharacter() {
   }, [message]);
 
   useEffect(() => {
+    if (character === "/step1_death.gif" || character === "/step2_death.gif")
+      return;
     const timer = setTimeout(() => setCharacter(""), 5000);
     return () => clearTimeout(timer);
   }, [character]);
